@@ -24,7 +24,7 @@ Goal: one script that syncs everything needed to rebuild this Omarchy (Arch + Hy
 
 ## What gets backed up
 
-### 1. Home folder: `/home/martin/` → `<USB>/omarchy-backup/<hostname>/home/`
+### 1. Home folder: `/home/<user>/` → `<USB>/omarchy-backup/<hostname>/home/`
 
 `rsync -aAXH --numeric-ids --delete`
 
@@ -125,7 +125,7 @@ Exit codes: rsync `0` and `24` (files vanished while reading) are treated as suc
    - `yay -S --needed - < pacman-aur.txt`
    - `xargs -a flatpak-apps.txt flatpak install -y`
 4. Restore `/etc` selectively with `rsync` as root, and diff against the new one first (`fstab`, `crypttab` and the bootloader config depend on the new disk's UUIDs, so do not blindly overwrite them).
-5. Restore home: `rsync -aAXH <USB>/omarchy-backup/<hostname>/home/ /home/martin/`.
+5. Restore home: `rsync -aAXH <USB>/omarchy-backup/<hostname>/home/ /home/<user>/`.
 6. Reboot, run `omarchy update`, and check that services (`systemd-enabled.txt`) are enabled.
 
 ## Open questions and risks

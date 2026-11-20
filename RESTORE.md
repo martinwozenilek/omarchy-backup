@@ -1,12 +1,12 @@
 # Restore Guide
 
-How to rebuild an Omarchy setup from a backup made by `omarchy-backup.sh`. Replace `omarchydesk` below with the hostname folder you want to restore from.
+How to rebuild an Omarchy setup from a backup made by `omarchy-backup.sh`. Replace `<hostname>` below with the name of the machine folder you want to restore from, and `<user>` with your username.
 
 Backup layout on the USB drive (LUKS2 + btrfs, label `OMARCHY-BACKUP`):
 
 ```
 omarchy-backup/<hostname>/
-├── home/          # full copy of /home/martin (without caches/temp files)
+├── home/          # full copy of /home/<user> (without caches/temp files)
 ├── system/
 │   ├── etc/       # /etc
 │   ├── boot/      # /boot (limine.conf, EFI)
@@ -20,7 +20,7 @@ omarchy-backup/<hostname>/
 
 ## 0. Prerequisites
 
-- A fresh Omarchy install on the new disk, with the same username (`martin`) and a working network connection.
+- A fresh Omarchy install on the new disk, with the same username as on the old system and a working network connection.
 - The USB drive plugged in.
 
 ## 1. Unlock and mount the backup
@@ -28,7 +28,7 @@ omarchy-backup/<hostname>/
 Plug in the USB drive and open it in the file manager. Enter the LUKS passphrase when asked, and the desktop automounts it at `/run/media/<user>/omarchy-backup`, the same way as for the backup script.
 
 ```bash
-B=/run/media/$USER/omarchy-backup/omarchy-backup/omarchydesk
+B=/run/media/$USER/omarchy-backup/omarchy-backup/<hostname>
 cat $B/LAST_BACKUP
 ```
 
@@ -38,7 +38,7 @@ Without a desktop (for example from a TTY or a live system), unlock and mount by
 sudo cryptsetup open /dev/disk/by-label/OMARCHY-BACKUP omarchy-backup
 sudo mkdir -p /mnt/omarchy-backup
 sudo mount -o ro /dev/mapper/omarchy-backup /mnt/omarchy-backup
-B=/mnt/omarchy-backup/omarchy-backup/omarchydesk
+B=/mnt/omarchy-backup/omarchy-backup/<hostname>
 ```
 
 ## 2. Reinstall packages
@@ -94,7 +94,7 @@ sudo systemctl restart NetworkManager bluetooth
 Log out of the desktop first, and run this from a TTY (Ctrl+Alt+F3) or as another user, so apps do not overwrite files while they are restored.
 
 ```bash
-rsync -aAXH --numeric-ids $B/home/ /home/martin/
+rsync -aAXH --numeric-ids $B/home/ /home/<user>/
 ```
 
 Add `--dry-run --itemize-changes` first to preview. To restore a single file or folder, copy just that path (for example `$B/home/.ssh/`). Older versions of overwritten files are in `$B/_deleted/<timestamp>/home/`.
