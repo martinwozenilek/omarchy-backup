@@ -1,0 +1,14 @@
+# logs and backup artifacts must never be committed
+*.log
+*.img
+.omarchy-backup-target
+LAST_BACKUP
+_deleted/
+
+# editor/OS noise
+*.swp
+*~
+.DS_Store
+
+# local Claude Code settings
+.claude/settings.local.json
