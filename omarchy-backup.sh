@@ -27,7 +27,12 @@ done
 if [[ $EUID -ne 0 ]]; then
   exec sudo --preserve-env=DISPLAY "$0" "$@"
 fi
-USER_NAME="${SUDO_USER:-martin}"
+# the invoking user: set by sudo; if started directly as root fall back to the login user
+USER_NAME="${SUDO_USER:-$(logname 2>/dev/null || true)}"
+if [[ -z $USER_NAME || $USER_NAME == root ]] || ! getent passwd "$USER_NAME" >/dev/null; then
+  echo "Cannot determine the user to back up. Run as a normal user (the script uses sudo itself)." >&2
+  exit 1
+fi
 USER_HOME="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 USER_UID="$(id -u "$USER_NAME")"
 
