@@ -18,6 +18,8 @@ omarchy-backup/<hostname>/
 └── LAST_BACKUP
 ```
 
+To change what is backed up, edit `omarchy-backup.toml`: add or remove `[[source]]` entries or adjust the `excludes` list.
+
 ## Setup (once)
 
 Format the USB drive. This **destroys all data** on it and asks for a LUKS passphrase:
@@ -39,6 +41,7 @@ The script does not unlock or mount the drive. Plug it in and unlock it in the f
 ./omarchy-backup.sh              # real backup
 ./omarchy-backup.sh --eject      # real backup, then unmount, lock and power off the drive
 ./omarchy-backup.sh -v           # verbose
+./omarchy-backup.sh --config other.toml   # use a different source list
 ```
 
 The script runs itself through `sudo`. Close your browser first, so its database files are copied consistently. Logs go to `~/.local/state/omarchy-backup/`, and the last 10 are kept.
@@ -58,6 +61,7 @@ The backup contains secrets in plain form: SSH and GPG keys, wifi passwords, bro
 | File | Purpose |
 |---|---|
 | `omarchy-backup.sh` | The backup script |
+| `omarchy-backup.toml` | What is backed up: source folders, destinations and excludes |
 | `format-usb.sh` | One-time USB drive setup |
 | `PLAN.md` | Original design and decisions |
 | `RESTORE.md` | Restore guide |
@@ -67,4 +71,4 @@ The backup contains secrets in plain form: SSH and GPG keys, wifi passwords, bro
 
 - Not a bootable image. The bootloader comes from a fresh Omarchy install.
 - A Windows install on another disk is not backed up.
-- Written for this machine, so check the paths and labels in the config block at the top of `omarchy-backup.sh` before using it elsewhere.
+- Written for this machine, so check the labels in the config block at the top of `omarchy-backup.sh` and the sources in `omarchy-backup.toml` before using it elsewhere.

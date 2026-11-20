@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # omarchy-backup.sh - rsync backup of an Omarchy setup to a LUKS+btrfs USB drive.
-# See PLAN.md. Run as: ./omarchy-backup.sh [-n] [-v] [--eject]   (re-executes itself via sudo)
+# See PLAN.md. Run as: ./omarchy-backup.sh [-n] [-v] [--eject] [--config FILE]   (re-executes itself via sudo)
 set -euo pipefail
 
 # ---------------------------------------------------------------- config
@@ -10,18 +10,25 @@ DEST_DIR="omarchy-backup"           # folder on the USB fs
 KEEP_DELETED_DAYS=30
 KEEP_LOGS=10
 MIN_FREE_GIB=5
+# what to back up (sources, destinations, excludes); override with --config FILE
+CONFIG="$(dirname "$(readlink -f "$0")")/omarchy-backup.toml"
 
 # ---------------------------------------------------------------- args
 DRY_RUN=0; VERBOSE=0; EJECT=0
-for a in "$@"; do
-  case "$a" in
+ARGS=("$@")
+while (( $# )); do
+  case "$1" in
     -n|--dry-run) DRY_RUN=1 ;;
     -v|--verbose) VERBOSE=1 ;;
     --eject)      EJECT=1 ;;
+    --config)     [[ -n ${2:-} ]] || { echo "--config needs a file" >&2; exit 2; }
+                  CONFIG="$(readlink -f "$2")"; shift ;;
     -h|--help)    sed -n '2,3p' "$0"; exit 0 ;;
-    *) echo "Unknown option: $a" >&2; exit 2 ;;
+    *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
+  shift
 done
+set -- "${ARGS[@]}"
 
 # ---------------------------------------------------------------- root + user
 if [[ $EUID -ne 0 ]]; then
@@ -52,6 +59,58 @@ notify() {  # best effort desktop notification as the real user
 # ---------------------------------------------------------------- lock
 exec 9>/run/omarchy-backup.lock
 flock -n 9 || { echo "Another backup is already running." >&2; exit 1; }
+
+# ---------------------------------------------------------------- load config
+# Parsed with python's tomllib. Prints one line per source:
+#   <path> TAB <dest> TAB <optional 0|1> TAB <vfat 0|1> TAB <exclude file or empty>
+WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
+SOURCES="$(python3 - "$CONFIG" "$USER_HOME" "$WORK" <<'PYEOF'
+import os, posixpath, sys, tomllib
+cfg_path, home, work = sys.argv[1:]
+def die(msg): sys.exit(f"Config {cfg_path}: {msg}")
+try:
+    with open(cfg_path, "rb") as f:
+        cfg = tomllib.load(f)
+except (OSError, tomllib.TOMLDecodeError) as e:
+    die(e)
+sources = cfg.get("source")
+if not isinstance(sources, list) or not sources:
+    die("no [[source]] entries")
+known = {"path", "dest", "optional", "vfat", "excludes"}
+seen = []
+for i, s in enumerate(sources, 1):
+    if unknown := set(s) - known:
+        die(f"source {i}: unknown keys {sorted(unknown)}")
+    path, dest = s.get("path"), s.get("dest")
+    if not isinstance(path, str) or not isinstance(dest, str):
+        die(f"source {i}: 'path' and 'dest' are required strings")
+    if path == "~" or path.startswith("~/"):
+        path = home + path[1:]
+    if not path.startswith("/"):
+        die(f"source {i}: path must be absolute or start with ~")
+    path, dest = posixpath.normpath(path), posixpath.normpath(dest)
+    if dest.startswith("/") or dest == "." or ".." in dest.split("/"):
+        die(f"source {i}: dest must be a relative path inside the backup")
+    if dest.split("/")[0] in ("packages", "_deleted"):
+        die(f"source {i}: dest {dest!r} is reserved")
+    for d in seen:
+        if dest == d or dest.startswith(d + "/") or d.startswith(dest + "/"):
+            die(f"source {i}: dest {dest!r} overlaps {d!r}")
+    seen.append(dest)
+    if any(c in v for v in (path, dest) for c in "\t\n"):
+        die(f"source {i}: tabs and newlines are not allowed in path or dest")
+    excl = s.get("excludes", [])
+    if not isinstance(excl, list) or not all(isinstance(e, str) and e and "\n" not in e for e in excl):
+        die(f"source {i}: excludes must be a list of non-empty strings")
+    xfile = ""
+    if excl:
+        xfile = os.path.join(work, f"excludes-{i}")
+        with open(xfile, "w") as f:
+            f.write("\n".join(excl) + "\n")
+    flags = [str(int(bool(s.get(k, False)))) for k in ("optional", "vfat")]
+    print("\t".join([path, dest, *flags, xfile]))
+PYEOF
+)" || { log "Invalid config, aborting."; exit 1; }
 
 # ---------------------------------------------------------------- locate the (auto-mounted) drive
 # The drive is unlocked and mounted by the desktop (udisks automount, /run/media/<user>/...).
@@ -91,12 +150,12 @@ cleanup() {
   chown "$USER_NAME": "$LOG" 2>/dev/null || true
   exit "$rc"
 }
-trap cleanup EXIT
+trap 'rc=$?; rm -rf "$WORK"; (exit $rc); cleanup' EXIT
 
 HOST_NAME="$(hostname)"
 DEST="$MOUNT_POINT/$DEST_DIR/$HOST_NAME"
 DELETED="$DEST/_deleted/$STAMP"
-mkdir -p "$DEST"/{home,packages,system}
+mkdir -p "$DEST/packages"
 
 # ---------------------------------------------------------------- rsync wrapper
 RSYNC_COMMON=(-aAXH --numeric-ids --delete --delete-excluded --human-readable)
@@ -110,33 +169,6 @@ run_rsync() {  # run_rsync <label> <args...>; exit codes 0 and 24 are success
   rsync "$@" || rc=$?
   if (( rc != 0 && rc != 24 )); then log "rsync failed for $label (exit $rc)"; exit "$rc"; fi
 }
-backup_dir_for() { (( DRY_RUN )) && return 0; echo "--backup" "--backup-dir=$DELETED/$1"; }
-
-# ---------------------------------------------------------------- excludes
-EXCLUDES="$(mktemp)"; trap 'rc=$?; rm -f "$EXCLUDES"; (exit $rc); cleanup' EXIT
-cat > "$EXCLUDES" <<'EOF'
-/.cache/
-/.local/share/Trash/
-/.thumbnails/
-/.npm/_cacache/
-/.cargo/registry/cache/
-/.cargo/registry/src/
-/.rustup/tmp/
-/.var/app/*/cache/
-/.config/*/Cache/
-/.config/*/Code Cache/
-/.config/*/GPUCache/
-/.config/*/CachedData/
-/.config/*/Service Worker/CacheStorage/
-/.mozilla/firefox/*/cache2/
-node_modules/
-__pycache__/
-lost+found/
-*.tmp
-*.temp
-*~
-.*.swp
-EOF
 
 # ---------------------------------------------------------------- 1. package lists
 log "Dumping package lists"
@@ -158,26 +190,7 @@ if (( ! DRY_RUN )); then
     > "$PK/systemd-user-enabled.txt" 2>/dev/null || true
 fi
 
-# ---------------------------------------------------------------- 2. system files
-# shellcheck disable=SC2046
-run_rsync "/etc" "${RSYNC_COMMON[@]}" $(backup_dir_for etc) /etc/ "$DEST/system/etc/"
-mkdir -p "$DEST/system/etc" "$DEST/system/boot" "$DEST/system/usr-local" "$DEST/system/var-lib"
-
-# /boot is vfat: no ownership/permissions
-run_rsync "/boot" -rt --modify-window=1 --delete $( (( DRY_RUN )) && echo "--dry-run --itemize-changes" ) \
-  /boot/ "$DEST/system/boot/"
-
-# shellcheck disable=SC2046
-run_rsync "/usr/local" "${RSYNC_COMMON[@]}" $(backup_dir_for usr-local) /usr/local/ "$DEST/system/usr-local/"
-
-for d in bluetooth NetworkManager iwd AccountsService; do
-  if [[ -d /var/lib/$d ]]; then
-    mkdir -p "$DEST/system/var-lib/$d"
-    # shellcheck disable=SC2046
-    run_rsync "/var/lib/$d" "${RSYNC_COMMON[@]}" $(backup_dir_for "var-lib-$d") "/var/lib/$d/" "$DEST/system/var-lib/$d/"
-  fi
-done
-
+# ---------------------------------------------------------------- 2. LUKS header
 # LUKS header of the root disk (kept only on the encrypted USB)
 if (( ! DRY_RUN )); then
   ROOT_LUKS_DEV="$(cryptsetup status root 2>/dev/null | awk '/device:/{print $2}' || true)"
@@ -191,10 +204,25 @@ if (( ! DRY_RUN )); then
   fi
 fi
 
-# ---------------------------------------------------------------- 3. home
-# shellcheck disable=SC2046
-run_rsync "home ($USER_HOME)" "${RSYNC_COMMON[@]}" --exclude-from="$EXCLUDES" $(backup_dir_for home) \
-  "$USER_HOME/" "$DEST/home/"
+# ---------------------------------------------------------------- 3. files (sources from the config)
+while IFS=$'\t' read -r -u 3 src dest optional vfat xfile; do
+  if [[ ! -d $src ]]; then
+    if (( optional )); then log "skip: $src (not present)"; continue; fi
+    log "Source $src does not exist. Aborting."; exit 1
+  fi
+  mkdir -p "$DEST/$dest"
+  opts=()
+  if (( vfat )); then  # FAT: no ownership, permissions or ACLs
+    opts+=(-rt --modify-window=1 --delete --human-readable)
+    (( DRY_RUN )) && opts+=(--dry-run --itemize-changes)
+    (( VERBOSE )) && opts+=(-v)
+  else
+    opts+=("${RSYNC_COMMON[@]}")
+    (( DRY_RUN )) || opts+=(--backup --backup-dir="$DELETED/$dest")
+  fi
+  [[ -n $xfile ]] && opts+=(--exclude-from="$xfile")
+  run_rsync "$src" "${opts[@]}" "$src/" "$DEST/$dest/"
+done 3<<< "$SOURCES"
 
 # ---------------------------------------------------------------- 4. finish
 if (( ! DRY_RUN )); then

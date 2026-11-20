@@ -1,0 +1,79 @@
+# omarchy-backup.toml - what omarchy-backup.sh backs up.
+#
+# Each [[source]] is synced with rsync, in the order listed, to
+#   <USB>/omarchy-backup/<hostname>/<dest>/
+# Overwritten or deleted files go to _deleted/<timestamp>/<dest>/ (kept 30 days).
+#
+# Keys:
+#   path      absolute path, or "~" for the home folder of the user running the backup
+#   dest      folder relative to the host backup folder ("packages" and "_deleted" are reserved)
+#   optional  true: skip silently if the path does not exist (default false: abort)
+#   vfat      true: FAT filesystem, synced with -rt and no ownership/ACLs/_deleted copies
+#   excludes  rsync exclude patterns; a leading "/" anchors to the root of `path`
+#
+# The backup includes secrets in plain form. Only caches and temp files are excluded:
+# do not add excludes that drop real data.
+
+[[source]]
+path = "/etc"
+dest = "system/etc"
+
+[[source]]
+path = "/boot"
+dest = "system/boot"
+vfat = true
+
+[[source]]
+path = "/usr/local"
+dest = "system/usr-local"
+
+[[source]]
+path = "/var/lib/bluetooth"          # paired devices
+dest = "system/var-lib/bluetooth"
+optional = true
+
+[[source]]
+path = "/var/lib/NetworkManager"
+dest = "system/var-lib/NetworkManager"
+optional = true
+
+[[source]]
+path = "/var/lib/iwd"                # wifi profiles
+dest = "system/var-lib/iwd"
+optional = true
+
+[[source]]
+path = "/var/lib/AccountsService"
+dest = "system/var-lib/AccountsService"
+optional = true
+
+[[source]]
+path = "~"
+dest = "home"
+excludes = [
+  # caches and trash
+  "/.cache/",
+  "/.local/share/Trash/",
+  "/.thumbnails/",
+  "/.npm/_cacache/",
+  "/.cargo/registry/cache/",
+  "/.cargo/registry/src/",
+  "/.rustup/tmp/",
+  "/.var/app/*/cache/",
+  # Electron/Chromium app caches
+  "/.config/*/Cache/",
+  "/.config/*/Code Cache/",
+  "/.config/*/GPUCache/",
+  "/.config/*/CachedData/",
+  "/.config/*/Service Worker/CacheStorage/",
+  "/.mozilla/firefox/*/cache2/",
+  # regenerable build output
+  "node_modules/",
+  "__pycache__/",
+  "lost+found/",
+  # temp and editor swap files
+  "*.tmp",
+  "*.temp",
+  "*~",
+  ".*.swp",
+]
