@@ -63,7 +63,6 @@ The backup contains secrets in plain form: SSH and GPG keys, wifi passwords, bro
 | `omarchy-backup.sh` | The backup script |
 | `omarchy-backup.toml` | What is backed up: source folders, destinations and excludes |
 | `format-usb.sh` | One-time USB drive setup |
-| `PLAN.md` | Original design and decisions |
 | `RESTORE.md` | Restore guide |
 | `CLAUDE.md` | Notes for Claude Code |
 

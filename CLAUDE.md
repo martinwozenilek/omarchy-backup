@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Bash scripts that back up an Omarchy (Arch Linux + Hyprland) install to a LUKS2 + btrfs USB drive with plain `rsync`. There is no build system, test suite or git repo. `PLAN.md` holds the original design and decisions, and `RESTORE.md` is the restore guide for users.
+Bash scripts that back up an Omarchy (Arch Linux + Hyprland) install to a LUKS2 + btrfs USB drive with plain `rsync`. There is no build system or test suite. `README.md` is the user overview and `RESTORE.md` the restore guide.
 
 - `omarchy-backup.sh`: the backup. It re-runs itself via `sudo`.
 - `omarchy-backup.toml`: what gets backed up. Each `[[source]]` has a `path`, a `dest` under the host folder, and optional `optional`, `vfat` and `excludes` (rsync patterns). The script parses it with Python's `tomllib` and validates it.
@@ -37,5 +37,5 @@ Strictly sequential flow, with settings in the config block at the top:
 - `/boot` is vfat (`vfat = true` in the config), so it is synced with `-rt` and no ownership or ACL flags. Everything else uses `-aAXH --numeric-ids`.
 - The backup contains secrets in plain form (`~/.ssh`, `~/.gnupg`, wifi profiles, LUKS header). It must stay on the encrypted drive, and the marker check must never be removed.
 - Everything except caches and temp files is backed up. Do not add excludes that drop real data without asking.
-- Keep `RESTORE.md` and `PLAN.md` paths in sync when the backup layout changes.
+- Keep the paths in `README.md` and `RESTORE.md` in sync when the backup layout changes.
 - Omarchy rule: never edit files under `/usr/share/omarchy/`. Reading them is fine.

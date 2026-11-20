@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # omarchy-backup.sh - rsync backup of an Omarchy setup to a LUKS+btrfs USB drive.
-# See PLAN.md. Run as: ./omarchy-backup.sh [-n] [-v] [--eject] [--config FILE]   (re-executes itself via sudo)
+# See README.md. Run as: ./omarchy-backup.sh [-n] [-v] [--eject] [--config FILE]   (re-executes itself via sudo)
 set -euo pipefail
 
 # ---------------------------------------------------------------- config
