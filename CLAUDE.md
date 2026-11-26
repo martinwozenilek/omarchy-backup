@@ -4,16 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Bash scripts that back up an Omarchy (Arch Linux + Hyprland) install to a LUKS2 + btrfs USB drive with plain `rsync`. There is no build system or test suite. `README.md` is the user overview and `RESTORE.md` the restore guide.
+Bash scripts that back up an Omarchy (Arch Linux + Hyprland) install to a LUKS2 + btrfs USB drive with plain `rsync`. There is no build system; `test.sh` runs syntax and config-validation smoke tests. `README.md` is the user overview and `RESTORE.md` the restore guide.
 
 - `omarchy-backup.sh`: the backup. It re-runs itself via `sudo`.
-- `omarchy-backup.toml`: what gets backed up. Each `[[source]]` has a `path`, a `dest` under the host folder, and optional `optional`, `vfat` and `excludes` (rsync patterns). The script parses it with Python's `tomllib` and validates it.
-- `format-usb.sh`: one-time setup that wipes a USB disk (GPT, LUKS2 labelled `OMARCHY-BACKUP`, btrfs, marker file). It refuses non-USB disks and the disks holding `/` or `/boot`.
+- `omarchy-backup.toml`: what gets backed up. Each `[[source]]` has a `path`, a `dest` under the host folder, and optional `optional`, `vfat`, `one_file_system` (default `true`), and `excludes` (rsync patterns). The script parses it with Python's `tomllib` and validates it.
+- `format-usb.sh`: one-time setup that wipes a USB disk (GPT, LUKS2 labelled `OMARCHY-BACKUP`, btrfs labelled `omarchy-backup`, marker file). It refuses non-USB disks and the disks holding `/`, `/boot` or `/home`.
 
 ## Commands
 
 ```bash
-bash -n omarchy-backup.sh                 # syntax check (shellcheck is not installed)
+./test.sh                                 # syntax and config-validator smoke tests
 ./omarchy-backup.sh --dry-run             # preview, writes nothing to the drive
 ./omarchy-backup.sh [-v] [--eject]        # real run; --eject unmounts, locks and powers off the drive
 sudo ./format-usb.sh /dev/sdX             # DESTROYS the disk; needs an interactive LUKS passphrase
@@ -25,11 +25,11 @@ Both scripts need root and, for the LUKS passphrase, a terminal. In a Claude Cod
 
 Strictly sequential flow, with settings in the config block at the top:
 
-1. Root re-exec, logging to `~/.local/state/omarchy-backup/` (last 10 kept), a `flock` lock, and loading the TOML config (`--config FILE` overrides the default next to the script).
-2. Find the drive by its btrfs label (`omarchy-backup`) among the mounted filesystems. The script never unlocks or mounts: the desktop automount (udisks, `/run/media/<user>/...`) must have done that. It aborts unless the marker file `.omarchy-backup-target` exists and the filesystem is btrfs.
+1. Root re-exec, `flock` lock, logging to `~/.local/state/omarchy-backup/` (owned by the invoking user, last 10 kept), and loading the TOML config (`--config FILE` overrides the default next to the script).
+2. Find the drive by its btrfs label (`omarchy-backup`) among the mounted filesystems. The script never unlocks or mounts: the desktop automount (udisks, `/run/media/<user>/...`) must have done that. It aborts unless the marker file `.omarchy-backup-target` exists, the filesystem is btrfs, it is mounted read-write (on real runs), and free space is at least `MIN_FREE_GIB`.
 3. Everything goes under `<USB>/omarchy-backup/<hostname>/` with `home/`, `system/`, `packages/` and `_deleted/`. Overwritten or deleted files go to `_deleted/<timestamp>/<dest>/` and are pruned after 30 days.
-4. Steps: package lists, the LUKS header of the root disk, then one rsync per config source in order (`/etc`, `/boot`, `/usr/local`, selected `/var/lib` dirs, home with the cache/temp excludes).
-5. The `cleanup` EXIT trap handles `--eject` (successful runs only) with `udisksctl unmount`, `lock` and `power-off`.
+4. Steps: package lists, the LUKS header of the root disk (detected dynamically from `/` with fallback to `root`, written atomically), then one rsync per config source in order (`/etc`, `/boot`, `/usr/local`, selected `/var/lib` dirs, home with the cache/temp excludes).
+5. The `cleanup` EXIT trap removes temp files, notifies on failure, handles `--eject` (successful non-dry runs only) with `udisksctl unmount`, `lock` and `power-off` (skipping power-off if lock fails), and flushes `tee`.
 
 ## Constraints
 
