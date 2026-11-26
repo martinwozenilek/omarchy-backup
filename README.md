@@ -1,6 +1,6 @@
 # omarchy-backup
 
-Simple `rsync` backup of an [Omarchy](https://omarchy.org/) (Arch Linux + Hyprland) setup to an encrypted external USB drive (LUKS2 + btrfs). It backs up what you need to rebuild the system, but not the packages themselves.
+Simple Rust CLI wrapping `rsync` to back up an [Omarchy](https://omarchy.org/) (Arch Linux + Hyprland) setup to an encrypted external USB drive (LUKS2 + btrfs). It backs up what you need to rebuild the system, but not the packages themselves.
 
 ## What is backed up
 
@@ -18,35 +18,55 @@ omarchy-backup/<hostname>/
 └── LAST_BACKUP
 ```
 
-To change what is backed up, edit `omarchy-backup.toml`: add or remove `[[source]]` entries or adjust the `excludes` list.
+To change settings (labels, retention, free-space threshold) or what is backed up, edit `omarchy-backup.toml`: adjust `[settings]`, add or remove `[[source]]` entries, or edit `excludes`.
+
+## Build
+
+Requires Rust (`cargo`) and standard Arch/Omarchy tools (`rsync`, `cryptsetup`, `udisksctl`, `findmnt`, `lsblk`, `pacman`, `notify-send`).
+
+```bash
+cargo build --release
+```
+
+This produces `./target/release/omarchy-backup`.
 
 ## Setup (once)
 
 Format the USB drive. This **destroys all data** on it and asks for a LUKS passphrase:
 
 ```bash
-sudo ./format-usb.sh /dev/sdX
+./target/release/omarchy-backup format-usb /dev/sdX
 ```
 
-It refuses non-USB disks and the disks holding `/`, `/boot` or `/home`. It creates GPT, LUKS2 (label `OMARCHY-BACKUP`), btrfs (label `omarchy-backup`) and a marker file `.omarchy-backup-target`.
+It re-executes itself via `sudo`, refuses non-USB disks and the disks holding `/`, `/boot` or `/home`, and reads `luks_label`, `fs_label`, and `marker` from `omarchy-backup.toml` (falling back to defaults if no config file is found). It creates GPT, LUKS2 (label `OMARCHY-BACKUP`), btrfs (label `omarchy-backup`), and the marker file `.omarchy-backup-target`.
 
-If the desktop auto-unlocks the new LUKS volume and the script fails with "device in use", create the btrfs filesystem on the already-open `/dev/mapper/...` device by hand.
+If the desktop auto-unlocks the new LUKS volume and formatting fails with "device in use", create the btrfs filesystem on the already-open `/dev/mapper/...` device by hand.
 
 ## Usage
 
-The script does not unlock or mount the drive. Plug it in and unlock it in the file manager, so the desktop automounts it at `/run/media/<user>/omarchy-backup`. Then run:
+The tool does not unlock or mount the drive. Plug it in and unlock it in the file manager, so the desktop automounts it at `/run/media/<user>/omarchy-backup`. Then run:
 
 ```bash
-./omarchy-backup.sh --dry-run    # preview, writes nothing
-./omarchy-backup.sh              # real backup
-./omarchy-backup.sh --eject      # real backup, then unmount, lock and power off the drive
-./omarchy-backup.sh -v           # verbose
-./omarchy-backup.sh --config other.toml   # use a different source list
+./target/release/omarchy-backup check               # validate omarchy-backup.toml (no root needed)
+./target/release/omarchy-backup --dry-run           # preview, writes nothing
+./target/release/omarchy-backup                     # real backup
+./target/release/omarchy-backup --eject             # real backup, then unmount, lock and power off the drive
+./target/release/omarchy-backup -v                  # verbose
+./target/release/omarchy-backup --config other.toml # use a different config file
 ```
 
-The script runs itself through `sudo`. Close your browser first, so its database files are copied consistently. Logs go to `~/.local/state/omarchy-backup/`, and the last 10 are kept.
+You can also pass the `backup` subcommand explicitly (`omarchy-backup backup --dry-run`). When `--config` is omitted, config discovery checks `./omarchy-backup.toml`, `<exe-dir>/omarchy-backup.toml`, and `~/.config/omarchy-backup/config.toml` in order.
 
-The script aborts unless the mounted btrfs drive contains the marker file, so it never syncs into the wrong place.
+Backup and `format-usb` re-execute themselves through `sudo`. Close your browser first, so its database files are copied consistently. Logs go to `~/.local/state/omarchy-backup/`, and the last 10 are kept.
+
+The tool aborts unless the mounted btrfs drive contains the marker file, so it never syncs into the wrong place.
+
+## Tests
+
+```bash
+cargo test
+cargo clippy --all-targets -- -D warnings
+```
 
 ## Restore
 
@@ -60,10 +80,9 @@ The backup contains secrets in plain form: SSH and GPG keys, wifi passwords, bro
 
 | File | Purpose |
 |---|---|
-| `omarchy-backup.sh` | The backup script |
-| `omarchy-backup.toml` | What is backed up: source folders, destinations and excludes |
-| `format-usb.sh` | One-time USB drive setup |
-| `test.sh` | Automated syntax and config-validation smoke tests |
+| `Cargo.toml` / `src/` | Rust CLI implementation (`backup`, `format-usb`, `check`) |
+| `tests/` | Automated CLI, config, parser, and mocked backup-flow tests |
+| `omarchy-backup.toml` | Settings (`[settings]`) and backup sources (`[[source]]` + excludes) |
 | `RESTORE.md` | Restore guide |
 | `CLAUDE.md` | Notes for Claude Code |
 
@@ -71,4 +90,4 @@ The backup contains secrets in plain form: SSH and GPG keys, wifi passwords, bro
 
 - Not a bootable image. The bootloader comes from a fresh Omarchy install.
 - A Windows install on another disk is not backed up.
-- Written for this machine, so check the labels at the top of `omarchy-backup.sh` and `format-usb.sh`, and the sources in `omarchy-backup.toml`, before using it elsewhere.
+- Configured for this machine, so review `[settings]` and `[[source]]` in `omarchy-backup.toml` before using it elsewhere.

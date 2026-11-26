@@ -1,6 +1,6 @@
 # Restore Guide
 
-How to rebuild an Omarchy setup from a backup made by `omarchy-backup.sh`. Replace `<hostname>` below with the name of the machine folder you want to restore from, and `<user>` with your username.
+How to rebuild an Omarchy setup from a backup made by `omarchy-backup`. Replace `<hostname>` below with the name of the machine folder you want to restore from, and `<user>` with your username.
 
 Backup layout on the USB drive (LUKS2 label `OMARCHY-BACKUP`, btrfs label `omarchy-backup`):
 

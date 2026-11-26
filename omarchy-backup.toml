@@ -1,10 +1,12 @@
-# omarchy-backup.toml - what omarchy-backup.sh backs up.
+# omarchy-backup.toml - configuration for omarchy-backup.
+#
+# [settings] is optional; omitted fields fall back to the defaults shown below.
 #
 # Each [[source]] is synced with rsync, in the order listed, to
-#   <USB>/omarchy-backup/<hostname>/<dest>/
-# Overwritten or deleted files go to _deleted/<timestamp>/<dest>/ (kept 30 days).
+#   <USB>/<dest_dir>/<hostname>/<dest>/
+# Overwritten or deleted files go to _deleted/<timestamp>/<dest>/ (kept `keep_deleted_days` days).
 #
-# Keys:
+# Source keys:
 #   path             absolute path, or "~" for the home folder of the user running the backup
 #   dest             folder relative to the host backup folder ("packages", "_deleted",
 #                    "LAST_BACKUP", and exact "system" are reserved)
@@ -15,6 +17,15 @@
 #
 # The backup includes secrets in plain form. Only caches and temp files are excluded:
 # do not add excludes that drop real data.
+
+[settings]
+fs_label = "omarchy-backup"        # btrfs label of the backup filesystem
+luks_label = "OMARCHY-BACKUP"      # LUKS2 partition label (used by format-usb)
+marker = ".omarchy-backup-target"  # must exist at the root of the USB filesystem
+dest_dir = "omarchy-backup"        # top-level folder on the USB filesystem
+keep_deleted_days = 30             # prune _deleted/<timestamp>/ older than this many days
+keep_logs = 10                     # number of backup logs kept in ~/.local/state/omarchy-backup/
+min_free_gib = 5                   # abort real runs if available space is below this threshold
 
 [[source]]
 path = "/etc"
