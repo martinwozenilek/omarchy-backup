@@ -28,7 +28,7 @@ Format the USB drive. This **destroys all data** on it and asks for a LUKS passp
 sudo ./format-usb.sh /dev/sdX
 ```
 
-It refuses non-USB disks and the disks holding `/` or `/boot`. It creates GPT, LUKS2 (label `OMARCHY-BACKUP`), btrfs (label `omarchy-backup`) and a marker file `.omarchy-backup-target`.
+It refuses non-USB disks and the disks holding `/`, `/boot` or `/home`. It creates GPT, LUKS2 (label `OMARCHY-BACKUP`), btrfs (label `omarchy-backup`) and a marker file `.omarchy-backup-target`.
 
 If the desktop auto-unlocks the new LUKS volume and the script fails with "device in use", create the btrfs filesystem on the already-open `/dev/mapper/...` device by hand.
 
@@ -63,6 +63,7 @@ The backup contains secrets in plain form: SSH and GPG keys, wifi passwords, bro
 | `omarchy-backup.sh` | The backup script |
 | `omarchy-backup.toml` | What is backed up: source folders, destinations and excludes |
 | `format-usb.sh` | One-time USB drive setup |
+| `test.sh` | Automated syntax and config-validation smoke tests |
 | `RESTORE.md` | Restore guide |
 | `CLAUDE.md` | Notes for Claude Code |
 
@@ -70,4 +71,4 @@ The backup contains secrets in plain form: SSH and GPG keys, wifi passwords, bro
 
 - Not a bootable image. The bootloader comes from a fresh Omarchy install.
 - A Windows install on another disk is not backed up.
-- Written for this machine, so check the labels in the config block at the top of `omarchy-backup.sh` and the sources in `omarchy-backup.toml` before using it elsewhere.
+- Written for this machine, so check the labels at the top of `omarchy-backup.sh` and `format-usb.sh`, and the sources in `omarchy-backup.toml`, before using it elsewhere.

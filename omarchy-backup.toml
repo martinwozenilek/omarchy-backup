@@ -5,11 +5,13 @@
 # Overwritten or deleted files go to _deleted/<timestamp>/<dest>/ (kept 30 days).
 #
 # Keys:
-#   path      absolute path, or "~" for the home folder of the user running the backup
-#   dest      folder relative to the host backup folder ("packages" and "_deleted" are reserved)
-#   optional  true: skip silently if the path does not exist (default false: abort)
-#   vfat      true: FAT filesystem, synced with -rt and no ownership/ACLs/_deleted copies
-#   excludes  rsync exclude patterns; a leading "/" anchors to the root of `path`
+#   path             absolute path, or "~" for the home folder of the user running the backup
+#   dest             folder relative to the host backup folder ("packages", "_deleted",
+#                    "LAST_BACKUP", and exact "system" are reserved)
+#   optional         true: skip silently if the path does not exist (default false: abort)
+#   vfat             true: FAT filesystem, synced with -rt and no ownership/ACLs/_deleted copies
+#   one_file_system  true (default): stay on one filesystem (-x), skipping mounts inside `path`
+#   excludes         rsync exclude patterns; a leading "/" anchors to the root of `path`
 #
 # The backup includes secrets in plain form. Only caches and temp files are excluded:
 # do not add excludes that drop real data.
@@ -51,6 +53,8 @@ optional = true
 path = "~"
 dest = "home"
 excludes = [
+  # backup script's own logs (written while rsync runs)
+  "/.local/state/omarchy-backup/",
   # caches and trash
   "/.cache/",
   "/.local/share/Trash/",
